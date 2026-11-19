@@ -18,7 +18,9 @@ jobs:
           pip install PyQt6 PyQt6-WebEngine pyinstaller
       - name: Build EXE and ZIP
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "ServerBrowser" server_browser.py
+          $script = (Get-ChildItem -Filter "*.py" | Select-Object -First 1).Name
+          echo "Found script: $script"
+          pyinstaller --noconfirm --onefile --windowed --name "ServerBrowser" "$script"
           Compress-Archive -Path dist/ServerBrowser.exe -DestinationPath dist/ServerBrowser-Windows.zip
       - uses: actions/upload-artifact@v4
         with:
@@ -35,12 +37,14 @@ jobs:
       - name: Install system tools and Python libs
         run: |
           sudo apt-get update
-          sudo apt-get install -y ruby ruby-dev build-essential rpm libxcb-cursor0
+          sudo apt-get install -y ruby ruby-dev build-essential rpm libxcb-cursor0 zip
           sudo gem install fpm
           pip install PyQt6 PyQt6-WebEngine pyinstaller
       - name: Build Binary and Package DEB / RPM / ZIP
         run: |
-          pyinstaller --noconfirm --onefile --windowed --name "server-browser" server_browser.py
+          SCRIPT=$(ls *.py | head -n 1)
+          echo "Found script: $SCRIPT"
+          pyinstaller --noconfirm --onefile --windowed --name "server-browser" "$SCRIPT"
           mkdir -p pkg/usr/local/bin
           cp dist/server-browser pkg/usr/local/bin/
           
