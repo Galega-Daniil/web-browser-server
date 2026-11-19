@@ -1,13 +1,12 @@
 import sys
 import os
 import platform
-import subprocess
 from PyQt6.QtCore import QUrl, Qt
-from PyQt6.QtGui import QIcon, QAction, QKeySequence
+from PyQt6.QtGui import QIcon
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QPushButton, QLineEdit, QComboBox,
-    QLabel, QDialog, QVBoxLayout, QTabWidget, QWidget, QProgressBar,
-    QTabBar, QCheckBox, QFileDialog
+    QLabel, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
+    QProgressBar, QCheckBox
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
@@ -66,7 +65,6 @@ class BrowserTab(QWidget):
         self.browser = QWebEngineView()
         s = self.browser.settings()
         s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        s.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, True)
 
         self.progress = QProgressBar()
         self.progress.setMaximumHeight(3)
@@ -87,7 +85,7 @@ class BrowserTab(QWidget):
 
     def on_url_changed(self, url):
         idx = self.window.tabs.indexOf(self)
-        if idx >= 0:
+        if idx >= 0 and self.window.tabs.currentWidget() is self:
             self.window.url_bar.setText(url.toString())
 
     def on_title_changed(self, title):
@@ -101,6 +99,7 @@ class ServerBrowser(QMainWindow):
         super().__init__()
         self.setWindowTitle("Server Chromium Browser")
         self.resize(1200, 800)
+        self.setWindowIcon(QIcon(os.path.join(BASE_DIR, "icon.ico")))
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
@@ -123,7 +122,13 @@ class ServerBrowser(QMainWindow):
         toolbar.addWidget(self.fwd_btn)
         toolbar.addWidget(self.reload_btn)
         toolbar.addWidget(self.home_btn)
-        toolbar.addWidget(self.url_bar, 1)
+
+        url_container = QWidget()
+        url_layout = QHBoxLayout(url_container)
+        url_layout.setContentsMargins(0, 0, 0, 0)
+        url_layout.addWidget(self.url_bar)
+        toolbar.addWidget(url_container)
+
         toolbar.addWidget(self.settings_btn)
 
         self.back_btn.clicked.connect(lambda: self.current().back())
@@ -134,7 +139,7 @@ class ServerBrowser(QMainWindow):
 
         self.add_tab("https://ya.ru")
 
-    def current(self) -> QWebEngineView:
+    def current(self):
         return self.tabs.currentWidget().browser
 
     def add_tab(self, url="https://ya.ru"):
@@ -165,27 +170,18 @@ class ServerBrowser(QMainWindow):
 
     def open_settings(self):
         dlg = SettingsDialog(self)
-        dlg.js_check.setChecked(
-            self.current().settings().testAttribute(
-                QWebEngineSettings.WebAttribute.JavascriptEnabled
-            )
-        )
-        dlg.img_check.setChecked(
-            self.current().settings().testAttribute(
-                QWebEngineSettings.WebAttribute.AutoLoadImages
-            )
-        )
+        s = self.current().settings()
+        dlg.js_check.setChecked(s.testAttribute(
+            QWebEngineSettings.WebAttribute.JavascriptEnabled))
+        dlg.img_check.setChecked(s.testAttribute(
+            QWebEngineSettings.WebAttribute.AutoLoadImages))
         if dlg.exec():
             for i in range(self.tabs.count()):
-                s = self.tabs.widget(i).browser.settings()
-                s.setAttribute(
-                    QWebEngineSettings.WebAttribute.JavascriptEnabled,
-                    dlg.js_check.isChecked()
-                )
-                s.setAttribute(
-                    QWebEngineSettings.WebAttribute.AutoLoadImages,
-                    dlg.img_check.isChecked()
-                )
+                st = self.tabs.widget(i).browser.settings()
+                st.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled,
+                                dlg.js_check.isChecked())
+                st.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages,
+                                dlg.img_check.isChecked())
 
 
 if __name__ == "__main__":
