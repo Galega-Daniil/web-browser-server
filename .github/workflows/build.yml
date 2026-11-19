@@ -20,8 +20,12 @@ jobs:
         run: |
           $script = (Get-ChildItem -Filter "*.py" | Select-Object -First 1).Name
           echo "Found script: $script"
-          pyinstaller --noconfirm --onefile --windowed --name "ServerBrowser" "$script"
-          Compress-Archive -Path "dist/ServerBrowser.exe" -DestinationPath "dist/ServerBrowser-Windows.zip"
+          pyinstaller --noconfirm --onedir --windowed --name "ServerBrowser" `
+            --collect-all PyQt6.QtWebEngineCore `
+            --collect-all PyQt6.QtWebEngineWidgets `
+            --hidden-import PyQt6.QtWebEngineCore `
+            "$script"
+          Compress-Archive -Path "dist/ServerBrowser" -DestinationPath "dist/ServerBrowser-Windows.zip"
       - uses: actions/upload-artifact@v4
         with:
           name: Windows-EXE-and-ZIP
@@ -44,9 +48,14 @@ jobs:
         run: |
           SCRIPT=$(ls *.py | head -n 1)
           echo "Found script: $SCRIPT"
-          pyinstaller --noconfirm --onefile --windowed --name "server-browser" "$SCRIPT"
+          pyinstaller --noconfirm --onedir --windowed --name "server-browser" \
+            --collect-all PyQt6.QtWebEngineCore \
+            --collect-all PyQt6.QtWebEngineWidgets \
+            --hidden-import PyQt6.QtWebEngineCore \
+            "$SCRIPT"
+
           mkdir -p pkg/usr/local/bin
-          cp dist/server-browser pkg/usr/local/bin/
+          cp -r dist/server-browser pkg/usr/local/bin/
 
           # Сборка .deb (Debian / Ubuntu)
           fpm -s dir -t deb -n server-browser -v 1.0.0 -a amd64 -C pkg usr/local/bin/server-browser
@@ -55,7 +64,7 @@ jobs:
           fpm -s dir -t rpm -n server-browser -v 1.0.0 -C pkg usr/local/bin/server-browser
 
           # Сборка .zip (Linux portable)
-          zip -j server-browser-linux.zip dist/server-browser
+          zip -r server-browser-linux.zip dist/server-browser
       - uses: actions/upload-artifact@v4
         with:
           name: Linux-DEB-RPM-ZIP
