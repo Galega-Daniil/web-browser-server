@@ -1,101 +1,191 @@
 import sys
 import os
+import platform
+import subprocess
 from PyQt6.QtCore import QUrl, Qt
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QAction, QKeySequence
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QPushButton, QLineEdit, QComboBox,
-    QLabel, QDialog, QVBoxLayout, QTabWidget, QWidget, QProgressBar
+    QLabel, QDialog, QVBoxLayout, QTabWidget, QWidget, QProgressBar,
+    QTabBar, QCheckBox, QFileDialog
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-def get_desktop_dir():
-    """Рабочий стол для Windows и Linux."""
-    home = os.path.expanduser("~")
-    if platform.system() == "Windows":
-        # Учитываем перенесённый рабочий стол через реестр
-        try:
-            import winreg
-            with winreg.OpenKey(
-                winreg.HKEY_CURRENT_USER,
-                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders"
-            ) as key:
-                return winreg.QueryValueEx(key, "Desktop")[0]
-        except Exception:
-            pass
-    return os.path.join(home, "Desktop" if platform.system() == "Windows" else "Рабочий стол")
+DARK_STYLE = """
+QMainWindow, QDialog { background-color: #1e1e2e; }
+QToolBar { background: #181825; border: none; spacing: 4px; padding: 4px; }
+QPushButton {
+    background: #313244; color: #cdd6f4; border: none;
+    border-radius: 6px; padding: 6px 12px; min-width: 30px;
+}
+QPushButton:hover { background: #45475a; }
+QLineEdit, QComboBox {
+    background: #313244; color: #cdd6f4; border: 1px solid #45475a;
+    border-radius: 6px; padding: 6px; selection-background-color: #585b70;
+}
+QTabWidget::pane { border: none; }
+QTabBar::tab {
+    background: #313244; color: #cdd6f4; padding: 6px 14px;
+    border-top-left-radius: 6px; border-top-right-radius: 6px;
+    margin-right: 2px; max-width: 220px;
+}
+QTabBar::tab:selected { background: #45475a; }
+QProgressBar { background: #313244; border: none; max-height: 3px; }
+QProgressBar::chunk { background: #89b4fa; }
+"""
 
 
-def create_windows_shortcut(target):
-    """Создаёт .lnk через PowerShell (без сторонних библиотек)."""
-    desktop = get_desktop_dir()
-    lnk_path = os.path.join(desktop, "Server Chromium Browser.lnk")
+class SettingsDialog(QDialog):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Настройки")
+        self.resize(420, 200)
 
-    workdir = os.path.dirname(target)
-    ps_script = (
-        "$ws = New-Object -ComObject WScript.Shell; "
-        f"$sc = $ws.CreateShortcut('{lnk_path}'); "
-        f"$sc.TargetPath = '{target}'; "
-        f"$sc.WorkingDirectory = '{workdir}'; "
-        "$sc.Description = 'Server Chromium Browser'; "
-        "$sc.Save()"
-    )
-    subprocess.run(
-        ["powershell", "-NoProfile", "-Command", ps_script],
-        check=True, capture_output=True
-    )
-    return lnk_path
+        self.js_check = QCheckBox("Включить JavaScript")
+        self.img_check = QCheckBox("Загружать изображения")
+
+        layout = QVBoxLayout(self)
+        layout.addWidget(self.js_check)
+        layout.addWidget(self.img_check)
+
+        close_btn = QPushButton("Готово")
+        close_btn.clicked.connect(self.accept)
+        layout.addWidget(close_btn)
 
 
-def create_linux_shortcut(target):
-    """Создаёт .desktop файл на рабочем столе и в меню приложений."""
-    home = os.path.expanduser("~")
-    desktop_dir = get_desktop_dir()
-    content = (
-        "[Desktop Entry]\n"
-        "Type=Application\n"
-        "Name=Server Chromium Browser\n"
-        f"Exec=python3 \"{target}\"\n"
-        f"Path={os.path.dirname(target)}\n"
-        "Icon=web-browser\n"
-        "Categories=Network;WebBrowser;\n"
-        "Terminal=false\n"
-    )
+class BrowserTab(QWidget):
+    def __init__(self, window):
+        super().__init__()
+        self.window = window
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
 
-    paths = [
-        os.path.join(desktop_dir, "server-chromium-browser.desktop"),
-        os.path.join(home, ".local", "share", "applications", "server-chromium-browser.desktop"),
-    ]
-    for path in paths:
-        os.makedirs(os.path.dirname(path), exist_ok=True)
-        with open(path, "w", encoding="utf-8") as f:
-            f.write(content)
-        os.chmod(path, 0o755)
-    return paths[0]
+        self.browser = QWebEngineView()
+        s = self.browser.settings()
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.ShowScrollBars, True)
+
+        self.progress = QProgressBar()
+        self.progress.setMaximumHeight(3)
+        self.progress.setTextVisible(False)
+        self.progress.setVisible(False)
+
+        layout.addWidget(self.progress)
+        layout.addWidget(self.browser)
+
+        self.browser.loadProgress.connect(self.on_progress)
+        self.browser.loadFinished.connect(lambda _: self.progress.setVisible(False))
+        self.browser.urlChanged.connect(self.on_url_changed)
+        self.browser.titleChanged.connect(self.on_title_changed)
+
+    def on_progress(self, value):
+        self.progress.setVisible(0 < value < 100)
+        self.progress.setValue(value)
+
+    def on_url_changed(self, url):
+        idx = self.window.tabs.indexOf(self)
+        if idx >= 0:
+            self.window.url_bar.setText(url.toString())
+
+    def on_title_changed(self, title):
+        idx = self.window.tabs.indexOf(self)
+        if idx >= 0:
+            self.window.tabs.setTabText(idx, title[:20] or "Новая вкладка")
 
 
-def main():
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    target = os.path.join(script_dir, "server_browser.py")
+class ServerBrowser(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Server Chromium Browser")
+        self.resize(1200, 800)
 
-    if not os.path.isfile(target):
-        print(f"Не найден файл браузера: {target}")
-        print("Положите install_shortcut.py в одну папку с браузером и запустите снова.")
-        return
+        self.tabs = QTabWidget()
+        self.tabs.setTabsClosable(True)
+        self.tabs.tabCloseRequested.connect(self.close_tab)
+        self.setCentralWidget(self.tabs)
 
-    system = platform.system()
-    if system == "Windows":
-        path = create_windows_shortcut(target)
-        print(f"Ярлык создан: {path}")
-    elif system == "Linux":
-        path = create_linux_shortcut(target)
-        print(f"Ярлык создан: {path}")
-        print("На GNOME может понадобиться разрешить запуск:")
-        print(f"  gio set \"{path}\" metadata::trusted true")
-    else:
-        print(f"Система {system} не поддерживается.")
+        toolbar = QToolBar()
+        self.addToolBar(toolbar)
+
+        self.back_btn = QPushButton("←")
+        self.fwd_btn = QPushButton("→")
+        self.reload_btn = QPushButton("⟳")
+        self.home_btn = QPushButton("⌂")
+        self.url_bar = QLineEdit()
+        self.url_bar.setPlaceholderText("Введите адрес и нажмите Enter")
+        self.url_bar.returnPressed.connect(self.navigate)
+        self.settings_btn = QPushButton("⚙")
+
+        toolbar.addWidget(self.back_btn)
+        toolbar.addWidget(self.fwd_btn)
+        toolbar.addWidget(self.reload_btn)
+        toolbar.addWidget(self.home_btn)
+        toolbar.addWidget(self.url_bar, 1)
+        toolbar.addWidget(self.settings_btn)
+
+        self.back_btn.clicked.connect(lambda: self.current().back())
+        self.fwd_btn.clicked.connect(lambda: self.current().forward())
+        self.reload_btn.clicked.connect(lambda: self.current().reload())
+        self.home_btn.clicked.connect(self.go_home)
+        self.settings_btn.clicked.connect(self.open_settings)
+
+        self.add_tab("https://ya.ru")
+
+    def current(self) -> QWebEngineView:
+        return self.tabs.currentWidget().browser
+
+    def add_tab(self, url="https://ya.ru"):
+        tab = BrowserTab(self)
+        self.tabs.addTab(tab, "Новая вкладка")
+        self.tabs.setCurrentWidget(tab)
+        tab.browser.load(QUrl(url))
+
+    def close_tab(self, index):
+        if self.tabs.count() > 1:
+            self.tabs.removeTab(index)
+        else:
+            self.close()
+
+    def navigate(self):
+        text = self.url_bar.text().strip()
+        if not text:
+            return
+        if not text.startswith(("http://", "https://")):
+            if " " in text or "." not in text:
+                text = "https://yandex.ru/search/?text=" + text
+            else:
+                text = "https://" + text
+        self.current().load(QUrl(text))
+
+    def go_home(self):
+        self.current().load(QUrl("https://ya.ru"))
+
+    def open_settings(self):
+        dlg = SettingsDialog(self)
+        dlg.js_check.setChecked(
+            self.current().settings().testAttribute(
+                QWebEngineSettings.WebAttribute.JavascriptEnabled
+            )
+        )
+        dlg.img_check.setChecked(
+            self.current().settings().testAttribute(
+                QWebEngineSettings.WebAttribute.AutoLoadImages
+            )
+        )
+        if dlg.exec():
+            for i in range(self.tabs.count()):
+                s = self.tabs.widget(i).browser.settings()
+                s.setAttribute(
+                    QWebEngineSettings.WebAttribute.JavascriptEnabled,
+                    dlg.js_check.isChecked()
+                )
+                s.setAttribute(
+                    QWebEngineSettings.WebAttribute.AutoLoadImages,
+                    dlg.img_check.isChecked()
+                )
 
 
 if __name__ == "__main__":
@@ -103,6 +193,7 @@ if __name__ == "__main__":
     sys.argv += ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
     try:
         app = QApplication(sys.argv)
+        app.setStyleSheet(DARK_STYLE)
         window = ServerBrowser()
         window.show()
         sys.exit(app.exec())
