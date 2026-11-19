@@ -1,5 +1,4 @@
 import os
-import sys
 import subprocess
 import platform
 
@@ -65,18 +64,17 @@ def create_linux_shortcut(target):
         os.makedirs(os.path.dirname(path), exist_ok=True)
         with open(path, "w", encoding="utf-8") as f:
             f.write(content)
-        # Право на запуск, чтобы рабочий стол считал файл ярлыком
         os.chmod(path, 0o755)
     return paths[0]
 
 
 def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
-    target = os.path.join(script_dir, "browser.py")
+    target = os.path.join(script_dir, "server_browser.py")
 
     if not os.path.isfile(target):
         print(f"Не найден файл браузера: {target}")
-        print("Положите install_shortcut.py в одну папку с browser.py и запустите снова.")
+        print("Положите install_shortcut.py в одну папку с браузером и запустите снова.")
         return
 
     system = platform.system()
@@ -92,7 +90,7 @@ def main():
         print(f"Система {system} не поддерживается.")
 
 
-     if __name__ == "__main__":
+if __name__ == "__main__":
     import traceback
     sys.argv += ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
     try:
