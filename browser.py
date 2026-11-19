@@ -1,17 +1,23 @@
 import sys
 import os
-import platform
 from PyQt6.QtCore import QUrl, Qt
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QPushButton, QLineEdit, QComboBox,
-    QLabel, QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
+    QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
     QProgressBar, QCheckBox
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
 from PyQt6.QtWebEngineCore import QWebEngineSettings
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+SEARCH_ENGINES = {
+    "Яндекс": "https://yandex.ru/search/?text=",
+    "Google": "https://www.google.com/search?q=",
+    "DuckDuckGo": "https://duckduckgo.com/?q=",
+}
+START_PAGE = "http://localhost"
 
 DARK_STYLE = """
 QMainWindow, QDialog { background-color: #1e1e2e; }
@@ -65,6 +71,8 @@ class BrowserTab(QWidget):
         self.browser = QWebEngineView()
         s = self.browser.settings()
         s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
 
         self.progress = QProgressBar()
         self.progress.setMaximumHeight(3)
@@ -114,14 +122,17 @@ class ServerBrowser(QMainWindow):
         self.reload_btn = QPushButton("⟳")
         self.home_btn = QPushButton("⌂")
         self.url_bar = QLineEdit()
-        self.url_bar.setPlaceholderText("Введите адрес и нажмите Enter")
+        self.url_bar.setPlaceholderText("Введите адрес или поисковый запрос и нажмите Enter")
         self.url_bar.returnPressed.connect(self.navigate)
+        self.search_bar = QComboBox()
+        self.search_bar.addItems(SEARCH_ENGINES.keys())
         self.settings_btn = QPushButton("⚙")
 
         toolbar.addWidget(self.back_btn)
         toolbar.addWidget(self.fwd_btn)
         toolbar.addWidget(self.reload_btn)
         toolbar.addWidget(self.home_btn)
+        toolbar.addWidget(self.search_bar)
 
         url_container = QWidget()
         url_layout = QHBoxLayout(url_container)
@@ -137,12 +148,20 @@ class ServerBrowser(QMainWindow):
         self.home_btn.clicked.connect(self.go_home)
         self.settings_btn.clicked.connect(self.open_settings)
 
-        self.add_tab("https://ya.ru")
+        # Горячие клавиши
+        QShortcut(QKeySequence("Ctrl+T"), self, activated=self.add_tab)
+        QShortcut(QKeySequence("Ctrl+W"), self, activated=self.close_current_tab)
+        QShortcut(QKeySequence("Ctrl+L"), self, activated=self.focus_url_bar)
+        QShortcut(QKeySequence("Alt+Left"), self, activated=lambda: self.current().back())
+        QShortcut(QKeySequence("Alt+Right"), self, activated=lambda: self.current().forward())
+        QShortcut(QKeySequence("F5"), self, activated=lambda: self.current().reload())
+
+        self.add_tab(START_PAGE)
 
     def current(self):
         return self.tabs.currentWidget().browser
 
-    def add_tab(self, url="https://ya.ru"):
+    def add_tab(self, url=START_PAGE):
         tab = BrowserTab(self)
         self.tabs.addTab(tab, "Новая вкладка")
         self.tabs.setCurrentWidget(tab)
@@ -154,19 +173,27 @@ class ServerBrowser(QMainWindow):
         else:
             self.close()
 
+    def close_current_tab(self):
+        self.close_tab(self.tabs.currentIndex())
+
+    def focus_url_bar(self):
+        self.url_bar.setFocus()
+        self.url_bar.selectAll()
+
     def navigate(self):
         text = self.url_bar.text().strip()
         if not text:
             return
         if not text.startswith(("http://", "https://")):
             if " " in text or "." not in text:
-                text = "https://yandex.ru/search/?text=" + text
+                engine = SEARCH_ENGINES[self.search_bar.currentText()]
+                text = engine + text
             else:
                 text = "https://" + text
         self.current().load(QUrl(text))
 
     def go_home(self):
-        self.current().load(QUrl("https://ya.ru"))
+        self.current().load(QUrl(START_PAGE))
 
     def open_settings(self):
         dlg = SettingsDialog(self)
