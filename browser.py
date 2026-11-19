@@ -1,7 +1,15 @@
+import sys
 import os
-import subprocess
-import platform
+from PyQt6.QtCore import QUrl, Qt
+from PyQt6.QtGui import QIcon
+from PyQt6.QtWidgets import (
+    QApplication, QMainWindow, QToolBar, QPushButton, QLineEdit, QComboBox,
+    QLabel, QDialog, QVBoxLayout, QTabWidget, QWidget, QProgressBar
+)
+from PyQt6.QtWebEngineWidgets import QWebEngineView
+from PyQt6.QtWebEngineCore import QWebEngineSettings
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 def get_desktop_dir():
     """Рабочий стол для Windows и Linux."""
