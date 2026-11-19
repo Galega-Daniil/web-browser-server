@@ -92,9 +92,7 @@ def main():
         print(f"Система {system} не поддерживается.")
 
 
-if __name__ == "__main__":
-    main()
-    if __name__ == "__main__":
+     if __name__ == "__main__":
     import traceback
     sys.argv += ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
     try:
