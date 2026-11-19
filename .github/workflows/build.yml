@@ -1,0 +1,61 @@
+name: Build Server Browser Packages
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: |
+          pip install PyQt6 PyQt6-WebEngine pyinstaller
+      - name: Build EXE and ZIP
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "ServerBrowser" server_browser.py
+          Compress-Archive -Path dist/ServerBrowser.exe -DestinationPath dist/ServerBrowser-Windows.zip
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Windows-EXE-and-ZIP
+          path: dist/*
+
+  build-linux:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install system tools and Python libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y ruby ruby-dev build-essential rpm libxcb-cursor0
+          sudo gem install fpm
+          pip install PyQt6 PyQt6-WebEngine pyinstaller
+      - name: Build Binary and Package DEB / RPM / ZIP
+        run: |
+          pyinstaller --noconfirm --onefile --windowed --name "server-browser" server_browser.py
+          mkdir -p pkg/usr/local/bin
+          cp dist/server-browser pkg/usr/local/bin/
+          
+          # Сборка .deb (Debian / Ubuntu)
+          fpm -s dir -t deb -n server-browser -v 1.0.0 -C pkg usr/local/bin/server-browser
+          
+          # Сборка .rpm (Fedora / RHEL)
+          fpm -s dir -t rpm -n server-browser -v 1.0.0 -C pkg usr/local/bin/server-browser
+          
+          # Сборка .zip (Linux portable)
+          zip -j server-browser-linux.zip dist/server-browser
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Linux-DEB-RPM-ZIP
+          path: |
+            *.deb
+            *.rpm
+            *.zip
