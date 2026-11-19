@@ -1,93 +1,76 @@
-# web-browser-server
+# Server Chromium Browser
 
-Локальный браузер на базе Chromium (`PyQt6` + `QWebEngineView`). Предназначен для запуска на сервере: без лишнего интерфейса, с отключённым автовоспроизведением и плагинами.
+Лёгкий браузер на базе **Chromium** (`PyQt6` + `QWebEngineView`) для серверов (VPS/VDS, Docker, Linux без GPU), автоматически открывающий `http://localhost`.
 
 ---
 
-## Быстрый старт
+## Возможности
+
+* **Стартовая страница:** `http://localhost` с кнопкой быстрого возврата (`⌂`).
+* **Поисковые системы:** переключатель на панели инструментов (Яндекс, Google, DuckDuckGo).
+* **Умная адресная строка:** поддержка локальных адресов (`localhost:8080`, `127.0.0.1`), доменов и поисковых запросов.
+* **Вкладки и темы:** работа с несколькими сервисами одновременно и тёмная тема (QSS).
+* **Серверная оптимизация:** флаги `--no-sandbox`, `--disable-gpu`, `--disable-dev-shm-usage`, отключение лишних плагинов и управление JavaScript/изображениями.
+
+---
+
+## Скачивание готовых сборок (`.exe`, `.deb`, `.rpm`, `.zip`)
+
+Сборки для Windows и Linux создаются автоматически через **GitHub Actions**:
+
+1. Откройте вкладку **[Actions](https://github.com)** в репозитории.
+2. Выберите последний успешный запуск.
+3. Скачайте нужный архив из раздела **Artifacts**:
+   * **`Windows-EXE-and-ZIP`** (`ServerBrowser.exe`, `ServerBrowser-Windows.zip`).
+   * **`Linux-DEB-RPM-ZIP`** (`.deb`, `.rpm` и портативный `server-browser-linux.zip`).
+
+### Установка
+
+* **Windows:** Распакуйте архив и запустите `ServerBrowser.exe`.
+* **Debian / Ubuntu (`.deb`):**
+  ```bash
+  sudo apt update && sudo apt install -y ./server-browser_1.0.0_amd64.deb libxcb-cursor0 libnss3
+  server-browser
+  ```
+* **Fedora / RHEL (`.rpm`):**
+  ```bash
+  sudo dnf install -y ./server-browser-1.0.0-1.x86_64.rpm
+  server-browser
+  ```
+
+> *Примечание для headless-серверов:* используйте `xvfb-run server-browser` или SSH-проброс (`ssh -X user@server`).
+
+---
+
+## Запуск из исходного кода
 
 ```bash
-git clone https://github.com/Galega-server/web-browser-server.git
+git clone https://github.com
 cd web-browser-server
 pip install PyQt6 PyQt6-WebEngine
-python server_browser.py
+python browser.py
 ```
-
-Стартовая страница — `http://localhost`.
-
-> Запускайте из терминала. При запуске двойным кликом окно может мгновенно исчезнуть — вы не увидите ошибку.
+*(Для Linux используйте `python3` и `pip3`).*
 
 ---
 
-## Готовые сборки
+## Горячие клавиши и системные требования
 
-| Система | Файл |
-|---|---|
-| Windows | `[server-chromium-browser-setup.exe](#)` |
-| Linux (Debian / Ubuntu) | `[server-chromium-browser_1.0.0_amd64.deb](#)` |
-| Linux (RHEL / Fedora / CentOS) | `[server-chromium-browser-1.0.0-1.x86_64.rpm](#)` |
+| Действие | Клавиши |
+| :--- | :--- |
+| Новая вкладка / Закрыть | `Ctrl + T` / `Ctrl + W` |
+| Адресная строка / Обновить | `Ctrl + L` / `F5` |
+| Назад / Вперёд | `Alt + Left` / `Alt + Right` |
 
-Для Linux также подойдёт один автономный файл (AppImage / `pyinstaller --onefile --windowed`).
-
----
-
-## Установка из исходников
-
-```bash
-git clone https://github.com/Galega-server/web-browser-server.git
-cd web-browser-server
-pip install PyQt6 PyQt6-WebEngine
-python server_browser.py
-```
-
-**Важно:** для `QWebEngineView` нужны оба пакета (`PyQt6` и `PyQt6-WebEngine`). Одного `PyQt6` недостаточно. На Linux предпочтительнее `python3`, а не `python`.
+* **ОС:** Windows 10/11, Ubuntu 20.04+, Debian 11+, Fedora 36+
+* **Python:** 3.9+ (рекомендуется 3.11+)
+* **ОЗУ / GPU:** от 1 ГБ ОЗУ (рекомендуется 2–4 ГБ); видеокарта не требуется.
 
 ---
 
-### Системные требования
+## Поддержка
 
-| Параметр | Минимум | Рекомендация |
-|---|---|---|
-| Python | 3.9 | 3.11+ |
-| ОЗУ | 1 ГБ | 4 ГБ |
-| Сеть | есть | есть |
-
-Приложение работает без GPU (`--disable-gpu`) и в изолированных средах (`--no-sandbox`, `--disable-dev-shm-usage`).
+При ошибках проверяйте `error.log` или обращайтесь на почту: **daniilgalega@mail.ru**
 
 ---
-
-### Возможности
-
-- Вкладки (`Ctrl+T`, `Ctrl+W`), закрытие вкладок.
-- Адресная строка: URL и поисковые запросы.
-- Выбор поисковой системы («Яндекс», «DuckDuckGo», «Google»).
-- Тёмная тема (QSS).
-- Стартовая страница `http://localhost`.
-- Отключённое автовоспроизведение и плагины.
-
----
-
-### Горячие клавиши
-
-| Действие | Клавиша |
-|---|---|
-| Новая вкладка | `Ctrl+T` |
-| Закрыть вкладку | `Ctrl+W` |
-| Фокус в адресную строку | `Ctrl+L` |
-| Назад | `Alt+Left` |
-| Вперёд | `Alt+Right` |
-| Обновить | `F5` |
-
----
-
-### Поддержка
-
-Если браузер не работает: **daniilgalega@mail.ru**
-
----
-
-Перед публикацией замените `#` в ссылках на реальные из Release, формат:
-
-```text
-https://github.com/Galega-server/web-browser-server/releases/download/v1.0.0/имя-файла
-```
+*2026 Основано на Chromium (Google Inc.)*
