@@ -94,3 +94,15 @@ def main():
 
 if __name__ == "__main__":
     main()
+    if __name__ == "__main__":
+    import traceback
+    sys.argv += ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
+    try:
+        app = QApplication(sys.argv)
+        window = ServerBrowser()
+        window.show()
+        sys.exit(app.exec())
+    except Exception:
+        with open("error.log", "w", encoding="utf-8") as f:
+            f.write(traceback.format_exc())
+        raise
