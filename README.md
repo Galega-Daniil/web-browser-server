@@ -18,7 +18,7 @@
 
 Сборки для Windows и Linux создаются автоматически через **GitHub Actions**:
 
-1. Откройте вкладку **[Actions](https://github.com)** в репозитории.
+1. Откройте вкладку **[Actions](https://github.com/Galega-Daniil/web-browser-server/actions)** в репозитории.
 2. Выберите последний успешный запуск.
 3. Скачайте нужный архив из раздела **Artifacts**:
    * **`Windows-EXE-and-ZIP`** (`ServerBrowser.exe`, `ServerBrowser-Windows.zip`).
@@ -45,7 +45,7 @@
 ## Запуск из исходного кода
 
 ```bash
-git clone https://github.com
+git clone https://github.com/Galega-Daniil/web-browser-server/
 cd web-browser-server
 pip install PyQt6 PyQt6-WebEngine
 python browser.py
