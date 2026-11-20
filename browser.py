@@ -1,26 +1,28 @@
 import sys
 import os
+import traceback
 from PyQt6.QtCore import QUrl, Qt
 from PyQt6.QtGui import QIcon, QKeySequence, QShortcut
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QToolBar, QPushButton, QLineEdit, QComboBox,
     QDialog, QVBoxLayout, QHBoxLayout, QTabWidget, QWidget,
-    QProgressBar, QCheckBox
+    QProgressBar, QCheckBox, QLabel
 )
 from PyQt6.QtWebEngineWidgets import QWebEngineView
-from PyQt6.QtWebEngineCore import QWebEngineSettings
+from PyQt6.QtWebEngineCore import QWebEngineSettings, QWebEnginePage
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
 SEARCH_ENGINES = {
-    "Яндекс": "https://yandex.ru/search/?text=",
-    "Google": "https://www.google.com/search?q=",
-    "DuckDuckGo": "https://duckduckgo.com/?q=",
+    "Яндекс": "https://yandex.ru",
+    "Google": "https://google.com",
+    "DuckDuckGo": "https://duckduckgo.com",
 }
 START_PAGE = "http://localhost"
 
 DARK_STYLE = """
-QMainWindow, QDialog { background-color: #1e1e2e; }
+QMainWindow, QDialog { background-color: #1e1e2e; color: #cdd6f4; }
+QCheckBox, QLabel { color: #cdd6f4; }
 QToolBar { background: #181825; border: none; spacing: 4px; padding: 4px; }
 QPushButton {
     background: #313244; color: #cdd6f4; border: none;
@@ -43,22 +45,52 @@ QProgressBar::chunk { background: #89b4fa; }
 """
 
 
-class SettingsDialog(QDialog):
+class ServerWebPage(QWebEnginePage):
     def __init__(self, parent=None):
         super().__init__(parent)
+        self.ignore_ssl = True
+
+    def certificateError(self, error):
+        if self.ignore_ssl:
+            error.acceptCertificate()
+            return True
+        return super().certificateError(error)
+
+
+class SettingsDialog(QDialog):
+    def __init__(self, current_engine, parent=None):
+        super().__init__(parent)
         self.setWindowTitle("Настройки")
-        self.resize(420, 200)
+        self.resize(420, 290)
+
+        layout = QVBoxLayout(self)
+
+        engine_label = QLabel("Поисковая система по умолчанию:")
+        layout.addWidget(engine_label)
+
+        self.engine_combo = QComboBox()
+        self.engine_combo.addItems(SEARCH_ENGINES.keys())
+        self.engine_combo.setCurrentText(current_engine)
+        layout.addWidget(self.engine_combo)
 
         self.js_check = QCheckBox("Включить JavaScript")
         self.img_check = QCheckBox("Загружать изображения")
+        self.ssl_check = QCheckBox("Игнорировать ошибки SSL (для самоподписанных сертификатов)")
 
-        layout = QVBoxLayout(self)
         layout.addWidget(self.js_check)
         layout.addWidget(self.img_check)
+        layout.addWidget(self.ssl_check)
 
         close_btn = QPushButton("Готово")
         close_btn.clicked.connect(self.accept)
         layout.addWidget(close_btn)
+
+        layout.addStretch()
+
+        footer_label = QLabel("2026 Сделано на основе: хрониум автор: Google.Inc")
+        footer_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        footer_label.setStyleSheet("color: #a6adc8; font-size: 11px;")
+        layout.addWidget(footer_label)
 
 
 class BrowserTab(QWidget):
@@ -69,9 +101,13 @@ class BrowserTab(QWidget):
         layout.setContentsMargins(0, 0, 0, 0)
 
         self.browser = QWebEngineView()
+        self.page = ServerWebPage(self.browser)
+        self.page.ignore_ssl = self.window.ignore_ssl
+        self.browser.setPage(self.page)
+
         s = self.browser.settings()
-        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, True)
-        s.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, True)
+        s.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, self.window.js_enabled)
+        s.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, self.window.img_enabled)
         s.setAttribute(QWebEngineSettings.WebAttribute.PluginsEnabled, False)
 
         self.progress = QProgressBar()
@@ -107,7 +143,13 @@ class ServerBrowser(QMainWindow):
         super().__init__()
         self.setWindowTitle("Server Chromium Browser")
         self.resize(1200, 800)
-        self.setWindowIcon(QIcon(os.path.join(BASE_DIR, "icon.ico")))
+        icon_path = os.path.join(BASE_DIR, "icon.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
+
+        self.js_enabled = True
+        self.img_enabled = True
+        self.ignore_ssl = True
 
         self.tabs = QTabWidget()
         self.tabs.setTabsClosable(True)
@@ -148,7 +190,6 @@ class ServerBrowser(QMainWindow):
         self.home_btn.clicked.connect(self.go_home)
         self.settings_btn.clicked.connect(self.open_settings)
 
-        # Горячие клавиши
         QShortcut(QKeySequence("Ctrl+T"), self, activated=self.add_tab)
         QShortcut(QKeySequence("Ctrl+W"), self, activated=self.close_current_tab)
         QShortcut(QKeySequence("Ctrl+L"), self, activated=self.focus_url_bar)
@@ -185,7 +226,9 @@ class ServerBrowser(QMainWindow):
         if not text:
             return
         if not text.startswith(("http://", "https://")):
-            if " " in text or "." not in text:
+            if text.startswith(("localhost", "127.0.0.1", "0.0.0.0")):
+                text = "http://" + text
+            elif " " in text or "." not in text:
                 engine = SEARCH_ENGINES[self.search_bar.currentText()]
                 text = engine + text
             else:
@@ -196,24 +239,32 @@ class ServerBrowser(QMainWindow):
         self.current().load(QUrl(START_PAGE))
 
     def open_settings(self):
-        dlg = SettingsDialog(self)
-        s = self.current().settings()
-        dlg.js_check.setChecked(s.testAttribute(
-            QWebEngineSettings.WebAttribute.JavascriptEnabled))
-        dlg.img_check.setChecked(s.testAttribute(
-            QWebEngineSettings.WebAttribute.AutoLoadImages))
+        dlg = SettingsDialog(self.search_bar.currentText(), self)
+        dlg.js_check.setChecked(self.js_enabled)
+        dlg.img_check.setChecked(self.img_enabled)
+        dlg.ssl_check.setChecked(self.ignore_ssl)
+
         if dlg.exec():
+            self.search_bar.setCurrentText(dlg.engine_combo.currentText())
+            self.js_enabled = dlg.js_check.isChecked()
+            self.img_enabled = dlg.img_check.isChecked()
+            self.ignore_ssl = dlg.ssl_check.isChecked()
+
             for i in range(self.tabs.count()):
-                st = self.tabs.widget(i).browser.settings()
-                st.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled,
-                                dlg.js_check.isChecked())
-                st.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages,
-                                dlg.img_check.isChecked())
+                tab = self.tabs.widget(i)
+                tab.page.ignore_ssl = self.ignore_ssl
+                st = tab.browser.settings()
+                st.setAttribute(QWebEngineSettings.WebAttribute.JavascriptEnabled, self.js_enabled)
+                st.setAttribute(QWebEngineSettings.WebAttribute.AutoLoadImages, self.img_enabled)
 
 
 if __name__ == "__main__":
-    import traceback
-    sys.argv += ["--no-sandbox", "--disable-gpu", "--disable-dev-shm-usage"]
+    sys.argv += [
+        "--no-sandbox",
+        "--disable-gpu",
+        "--disable-dev-shm-usage",
+        "--ignore-certificate-errors"
+    ]
     try:
         app = QApplication(sys.argv)
         app.setStyleSheet(DARK_STYLE)
@@ -223,4 +274,3 @@ if __name__ == "__main__":
     except Exception:
         with open("error.log", "w", encoding="utf-8") as f:
             f.write(traceback.format_exc())
-        raise
